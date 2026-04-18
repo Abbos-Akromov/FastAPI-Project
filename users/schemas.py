@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from pydantic.networks import EmailStr
+
 
 class SignUpSchema(BaseModel):
     first_name: Optional[str] = None
@@ -23,8 +25,26 @@ class SignUpSchema(BaseModel):
 
 class LoginSchema(BaseModel):
     username: str
-    password: str
+    password: str   
 
 
 class Settings(BaseModel):
     authjwt_secret_key: str = "e6cb9b546658757296f08917c1c1effa96905dbc8a2fb626d02e511cc9b61303"
+
+
+class UpdateUserSchema(BaseModel):
+    first_name: Optional[str]
+    username: Optional[str]
+    email: Optional[EmailStr]
+
+    class Config:
+        from_attributes = True
+
+
+class PassUpdateSchema(BaseModel):
+    old_password: str
+    new_password: str
+    confirm_password: str
+
+    class Config:
+        from_attributes = True

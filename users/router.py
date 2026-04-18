@@ -1,11 +1,18 @@
+from sqlalchemy.testing.plugin.plugin_base import exclude_tags
 from users.models import User
 from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
-from users.schemas import SignUpSchema, LoginSchema
+from users.schemas import SignUpSchema, LoginSchema, UpdateUserSchema, PassUpdateSchema
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal
 from werkzeug.security import generate_password_hash, check_password_hash
 from fastapi_jwt_auth import AuthJWT
+import datetime
+
+ACCESS_EXPIRE_TIME = 1
+REFRESH_EXPIRE_TIME = 4
+
+
 
 router = APIRouter(prefix='/auth', tags=['auth', ])
 
@@ -75,7 +82,8 @@ def login(
             detail='Parol xato'
         )
 
-    access_token = Authorize.create_access_token(subject=str(db_user.id))
+    expires = datetime.timedelta(days=1)
+    access_token = Authorize.create_access_token(subject=str(db_user.id), expires_time=expires)
     refresh_token = Authorize.create_refresh_token(subject=str(db_user.id))
 
     return {
@@ -85,3 +93,77 @@ def login(
     }
 
 
+
+
+
+@router.get('/profile')
+def profile(Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        current_user = Authorize.get_jwt_subject()
+        user = session.query(User).filter(User.id==current_user).first()
+        return {
+            'status': status.HTTP_200_OK,
+            'username': user.username
+        }
+    except Exception as e:
+        raise HTTPException(detail=f'Error: {e}', status_code=status.HTTP_400_BAD_REQUEST)
+
+
+@router.patch('/update')
+def update(new_data: UpdateUserSchema, Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        current_user = Authorize.get_jwt_subject()
+        user = session.query(User).filter(User.id==current_user).first()
+
+        if new_data.username:
+            user.username = new_data.username
+        if new_data.first_name:
+            user.first_name = new_data.first_name
+        if new_data.email:
+            user.email = new_data.email
+
+
+        session.commit()
+        session.refresh(user)
+
+        return {
+            'status': status.HTTP_200_OK,
+            'username': user.username
+        }
+    except Exception as e:
+        raise HTTPException(detail=f'Error: {e}', status_code=status.HTTP_400_BAD_REQUEST)
+
+
+
+@router.patch('/pass-update')
+def passwordupdate(data: PassUpdateSchema, Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        current_user = Authorize.get_jwt_subject()
+        user = session.query(User).filter(User.id==current_user).first()
+
+        check_user = check_password_hash(user.password, data.old_password)
+
+        if not check_user:
+            raise HTTPException(detail='oldingi parol xato', status_code=status.HTTP_400_BAD_REQUEST)
+
+        if data.old_password == data.new_password:
+            raise HTTPException(detail = 'Yangi parol oldingisi bilan bir xil bolmasin', status_code=status.HTTP_400_BAD_REQUEST)
+
+        if data.confirm_password != data.new_password:
+            raise HTTPException(detail='Yangi parollar bir xil bolishi kerak!', status_code=status.HTTP_400_BAD_REQUEST)
+
+        user.password = generate_password_hash(data.new_password)
+
+
+        session.commit()
+        session.refresh(user)
+
+        return {
+            'status': status.HTTP_200_OK,
+            'message': 'parol ozgardi'
+        }
+    except Exception as e:
+        raise HTTPException(detail=f'Error: {e}', status_code=status.HTTP_400_BAD_REQUEST)

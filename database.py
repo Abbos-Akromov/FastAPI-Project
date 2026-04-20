@@ -6,3 +6,10 @@ engine = create_engine('postgresql://postgres:123@localhost:5432/fauth_db', echo
 Base = declarative_base()
 
 SessionLocal = sessionmaker(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

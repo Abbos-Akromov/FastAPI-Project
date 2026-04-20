@@ -24,7 +24,7 @@ class SignUpSchema(BaseModel):
             }
 
 class LoginSchema(BaseModel):
-    username: str
+    username_or_email: str
     password: str   
 
 
@@ -33,9 +33,9 @@ class Settings(BaseModel):
 
 
 class UpdateUserSchema(BaseModel):
-    first_name: Optional[str]
-    username: Optional[str]
-    email: Optional[EmailStr]
+    first_name: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
 
     class Config:
         from_attributes = True

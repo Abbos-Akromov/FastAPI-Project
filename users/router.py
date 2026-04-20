@@ -1,3 +1,5 @@
+from os import access
+
 from sqlalchemy.testing.plugin.plugin_base import exclude_tags
 from users.models import User
 from fastapi import APIRouter, Depends, status
@@ -7,7 +9,7 @@ from sqlalchemy.orm import Session
 from database import engine, SessionLocal
 from werkzeug.security import generate_password_hash, check_password_hash
 from fastapi_jwt_auth import AuthJWT
-import datetime
+from sqlalchemy import or_
 
 ACCESS_EXPIRE_TIME = 1
 REFRESH_EXPIRE_TIME = 4
@@ -68,7 +70,7 @@ def login(
         Authorize: AuthJWT = Depends(),
         db: Session = Depends(get_db)
 ):
-    db_user = session.query(User).filter(User.username == data.username).first()
+    db_user = session.query(User).filter(or_(User.username == data.username_or_email) | or_(User.email == data.username_or_email)).first()
 
     if not db_user:
         raise HTTPException(
@@ -132,13 +134,14 @@ def update(new_data: UpdateUserSchema, Authorize: AuthJWT = Depends()):
             'status': status.HTTP_200_OK,
             'username': user.username
         }
+
     except Exception as e:
         raise HTTPException(detail=f'Error: {e}', status_code=status.HTTP_400_BAD_REQUEST)
 
 
-
 @router.patch('/pass-update')
 def passwordupdate(data: PassUpdateSchema, Authorize: AuthJWT = Depends()):
+
     try:
         Authorize.jwt_required()
         current_user = Authorize.get_jwt_subject()
@@ -167,3 +170,20 @@ def passwordupdate(data: PassUpdateSchema, Authorize: AuthJWT = Depends()):
         }
     except Exception as e:
         raise HTTPException(detail=f'Error: {e}', status_code=status.HTTP_400_BAD_REQUEST)
+
+
+@router.get('/login_refresh')
+def login_refresh(Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_refresh_token_required()
+        current_user = Authorize.get_jwt_subject()
+
+        access_token = Authorize.create_access_token(subject=str(current_user))
+
+        return {
+            'status': status.HTTP_201_CREATED,
+            'access_token': access_token
+        }
+
+    except Exception as e:
+        raise HTTPException(detail=f"{e}", status_code=status.HTTP_400_BAD_REQUEST)

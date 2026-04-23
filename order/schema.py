@@ -3,5 +3,7 @@ from typing import Optional
 
 
 class CardItemSchema(BaseModel):
-    product_id: int
     quantity: int
+
+class CardItemUpdateSchema(BaseModel):
+    position: bool

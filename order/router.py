@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from order.schema import CardItemSchema
+from order.schema import CardItemSchema, CardItemUpdateSchema
 from order.models import OrderItem, Order, Card, CardItem, Products
 from users.models import User
 from fastapi_jwt_auth import AuthJWT
@@ -10,10 +10,11 @@ router = APIRouter(prefix='/order', tags=['order'])
 
 
 @router.post('/add_card/{product_id}')
-def add_card(product_id: int, data: CardItemSchema, db: Session = Depends(get_db()), Authorize: AuthJWT = Depends()):
+def add_card(product_id: int, data: CardItemSchema, db: Session = Depends(get_db), Authorize: AuthJWT = Depends()):
     try:
         Authorize.jwt_required()
         current_user_id = Authorize.get_jwt_subject()
+
         user = db.query(User).filter(User.id == current_user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User topilmadi")
@@ -54,8 +55,31 @@ def add_card(product_id: int, data: CardItemSchema, db: Session = Depends(get_db
         raise HTTPException(detail=str(e), status_code=status.HTTP_400_BAD_REQUEST)
 
 
+@router.delete('/delete-card-item/{item_id}')
+def delete_card_item(item_id: int, db: Session = Depends(get_db), Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        current_user_id = Authorize.get_jwt_subject()
+
+        item = db.query(CardItem).join(Card).filter(
+            CardItem.id == item_id,
+            Card.user_id == current_user_id
+        ).first()
+
+        if not item:
+            raise HTTPException(status_code=404, detail="Element topilmadi yoki sizga tegishli emas")
+
+        db.delete(item)
+        db.commit()
+        return {"status": "success", "message": "Mahsulot savatchadan o'chirildi"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(detail=str(e), status_code=status.HTTP_400_BAD_REQUEST)
+
+
 @router.post('/create-order')
-def create_order(db: Session = Depends(get_db()), Authorize: AuthJWT = Depends()):
+def create_order(db: Session = Depends(get_db), Authorize: AuthJWT = Depends()):
     try:
         Authorize.jwt_required()
         current_user_id = Authorize.get_jwt_subject()
@@ -79,7 +103,6 @@ def create_order(db: Session = Depends(get_db()), Authorize: AuthJWT = Depends()
                 price=item.product.price
             )
             db.add(order_item)
-
             db.delete(item)
 
         db.commit()
@@ -89,3 +112,43 @@ def create_order(db: Session = Depends(get_db()), Authorize: AuthJWT = Depends()
         db.rollback()
         raise HTTPException(detail=str(e), status_code=status.HTTP_400_BAD_REQUEST)
 
+
+@router.post('/order/{order_id}/cancel')
+def cancel_order(order_id: int, db: Session = Depends(get_db), Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        user_id = Authorize.get_jwt_subject()
+
+        order = db.query(Order).filter(Order.id == order_id, Order.user_id == user_id).first()
+
+        if not order:
+            raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
+
+        if order.status != "pending":
+            raise HTTPException(status_code=400, detail="Faqat kutilayotgan buyurtmalarni bekor qilish mumkin")
+
+        order.status = "canceled"
+        db.commit()
+        return {"status": "success", "message": "Buyurtma bekor qilindi"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(detail=str(e), status_code=status.HTTP_400_BAD_REQUEST)
+
+
+@router.patch('/order/{order_id}/update-status')
+def update_order_status(order_id: int, status_name: str, db: Session = Depends(get_db), Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
+
+        order.status = status_name
+        db.commit()
+        return {"status": "success", "new_status": status_name}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(detail=str(e), status_code=status.HTTP_400_BAD_REQUEST)

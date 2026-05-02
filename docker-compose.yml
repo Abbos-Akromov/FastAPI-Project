@@ -1,0 +1,30 @@
+
+
+services:
+  db:
+    image: postgres:15
+    container_name: fastapi_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: fauth_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: fastapi_web
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:123@db:5432/fauth_db
+    depends_on:
+      - db
+    command: sh -c "python init_db.py && uvicorn main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  postgres_data:
